@@ -1,6 +1,7 @@
 import {task} from 'gulp';
-import {DIST_ROOT} from '../constants';
 import {cleanTask} from '../util/task_helpers';
+import {buildConfig} from 'material2-build-tools';
 
 
-task('clean', cleanTask(DIST_ROOT));
+/** Deletes the dist/ directory. */
+task('clean', cleanTask(buildConfig.outputDir));

@@ -5,7 +5,6 @@
 :host {
   display: flex;
   flex-direction: column;
-  font-family: $mat-font-family;
 
   &.mat-tab-group-inverted-header {
     flex-direction: column-reverse;
@@ -55,10 +54,4 @@
   :host.mat-tab-group-dynamic-height &.mat-tab-body-active {
     overflow-y: hidden;
   }
-}
-
-// Styling for any tab that is marked disabled
-.mat-tab-disabled {
-  cursor: default;
-  pointer-events: none;
 }

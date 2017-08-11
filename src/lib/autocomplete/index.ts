@@ -1,24 +1,27 @@
-import {ModuleWithProviders, NgModule} from '@angular/core';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
 
-import {MdOptionModule, OverlayModule, OVERLAY_PROVIDERS, CompatibilityModule} from '../core';
+import {NgModule} from '@angular/core';
+import {MdOptionModule, OverlayModule, MdCommonModule} from '../core';
 import {CommonModule} from '@angular/common';
 import {MdAutocomplete} from './autocomplete';
-import {MdAutocompleteTrigger} from './autocomplete-trigger';
+import {
+  MdAutocompleteTrigger,
+  MD_AUTOCOMPLETE_SCROLL_STRATEGY_PROVIDER,
+} from './autocomplete-trigger';
 
 @NgModule({
-  imports: [MdOptionModule, OverlayModule, CompatibilityModule, CommonModule],
-  exports: [MdAutocomplete, MdOptionModule, MdAutocompleteTrigger, CompatibilityModule],
+  imports: [MdOptionModule, OverlayModule, MdCommonModule, CommonModule],
+  exports: [MdAutocomplete, MdOptionModule, MdAutocompleteTrigger, MdCommonModule],
   declarations: [MdAutocomplete, MdAutocompleteTrigger],
+  providers: [MD_AUTOCOMPLETE_SCROLL_STRATEGY_PROVIDER],
 })
-export class MdAutocompleteModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdAutocompleteModule,
-      providers: [OVERLAY_PROVIDERS]
-    };
-  }
-}
+export class MdAutocompleteModule {}
 
 
 export * from './autocomplete';

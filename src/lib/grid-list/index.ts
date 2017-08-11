@@ -1,5 +1,13 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
-import {MdLineModule, CompatibilityModule} from '../core';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
+import {NgModule} from '@angular/core';
+import {MdLineModule, MdCommonModule} from '../core';
 import {
   MdGridTile, MdGridTileText, MdGridTileFooterCssMatStyler,
   MdGridTileHeaderCssMatStyler, MdGridAvatarCssMatStyler
@@ -8,13 +16,13 @@ import {MdGridList} from './grid-list';
 
 
 @NgModule({
-  imports: [MdLineModule, CompatibilityModule],
+  imports: [MdLineModule, MdCommonModule],
   exports: [
     MdGridList,
     MdGridTile,
     MdGridTileText,
     MdLineModule,
-    CompatibilityModule,
+    MdCommonModule,
     MdGridTileHeaderCssMatStyler,
     MdGridTileFooterCssMatStyler,
     MdGridAvatarCssMatStyler
@@ -28,15 +36,8 @@ import {MdGridList} from './grid-list';
     MdGridAvatarCssMatStyler
   ],
 })
-export class MdGridListModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdGridListModule,
-      providers: []
-    };
-  }
-}
+export class MdGridListModule {}
 
 
 export * from './grid-list';
+export {MdGridTile} from './grid-tile';

@@ -1,3 +1,11 @@
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
 import {
   Component,
   ViewEncapsulation,
@@ -6,15 +14,15 @@ import {
   Input,
   ContentChildren,
   QueryList,
-  Renderer,
+  Renderer2,
   ElementRef,
   Optional,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import {MdGridTile} from './grid-tile';
 import {TileCoordinator} from './tile-coordinator';
 import {TileStyler, FitTileStyler, RatioTileStyler, FixedTileStyler} from './tile-styler';
-import {MdGridListColsError} from './grid-list-errors';
-import {Dir} from '../core';
+import {Directionality} from '../core';
 import {
   coerceToString,
   coerceToNumber,
@@ -33,9 +41,9 @@ const MD_FIT_MODE = 'fit';
   templateUrl: 'grid-list.html',
   styleUrls: ['grid-list.css'],
   host: {
-    'role': 'list',
-    '[class.mat-grid-list]': 'true',
+    'class': 'mat-grid-list',
   },
+  changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
 export class MdGridList implements OnInit, AfterContentChecked {
@@ -60,9 +68,9 @@ export class MdGridList implements OnInit, AfterContentChecked {
   @ContentChildren(MdGridTile) _tiles: QueryList<MdGridTile>;
 
   constructor(
-      private _renderer: Renderer,
+      private _renderer: Renderer2,
       private _element: ElementRef,
-      @Optional() private _dir: Dir) {}
+      @Optional() private _dir: Directionality) {}
 
   /** Amount of columns in the grid list. */
   @Input()
@@ -97,7 +105,8 @@ export class MdGridList implements OnInit, AfterContentChecked {
   /** Throw a friendly error if cols property is missing */
   private _checkCols() {
     if (!this.cols) {
-      throw new MdGridListColsError();
+      throw Error(`md-grid-list: must pass in number of columns. ` +
+                      `Example: <md-grid-list cols="3">`);
     }
   }
 
@@ -134,9 +143,9 @@ export class MdGridList implements OnInit, AfterContentChecked {
   }
 
   /** Sets style on the main grid-list element, given the style name and value. */
-  _setListStyle(style: [string, string]): void {
+  _setListStyle(style: [string, string] | null): void {
     if (style) {
-      this._renderer.setElementStyle(this._element.nativeElement, style[0], style[1]);
+      this._renderer.setStyle(this._element.nativeElement, style[0], style[1]);
     }
   }
 }

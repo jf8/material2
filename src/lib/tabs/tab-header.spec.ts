@@ -1,6 +1,8 @@
-import {async, ComponentFixture, TestBed} from '@angular/core/testing';
+import {
+  async, ComponentFixture, TestBed, fakeAsync, tick, discardPeriodicTasks
+} from '@angular/core/testing';
 import {Component, ViewChild, ViewContainerRef} from '@angular/core';
-import {LayoutDirection, Dir} from '../core/rtl/dir';
+import {Direction, Directionality} from '../core/bidi/index';
 import {MdTabHeader} from './tab-header';
 import {MdRippleModule} from '../core/ripple/index';
 import {CommonModule} from '@angular/common';
@@ -10,11 +12,14 @@ import {MdTabLabelWrapper} from './tab-label-wrapper';
 import {RIGHT_ARROW, LEFT_ARROW, ENTER} from '../core/keyboard/keycodes';
 import {FakeViewportRuler} from '../core/overlay/position/fake-viewport-ruler';
 import {ViewportRuler} from '../core/overlay/position/viewport-ruler';
-import {dispatchKeyboardEvent} from '../core/testing/dispatch-events';
+import {dispatchFakeEvent, dispatchKeyboardEvent} from '@angular/cdk/testing';
+import {Subject} from 'rxjs/Subject';
+import {By} from '@angular/platform-browser';
 
 
 describe('MdTabHeader', () => {
-  let dir: LayoutDirection = 'ltr';
+  let dir: Direction = 'ltr';
+  let change = new Subject();
   let fixture: ComponentFixture<SimpleTabHeaderApp>;
   let appComponent: SimpleTabHeaderApp;
 
@@ -29,7 +34,7 @@ describe('MdTabHeader', () => {
         SimpleTabHeaderApp,
       ],
       providers: [
-        {provide: Dir, useFactory: () => { return {value: dir}; }},
+        {provide: Directionality, useFactory: () => ({value: dir, change: change.asObservable()})},
         {provide: ViewportRuler, useClass: FakeViewportRuler},
       ]
     });
@@ -163,16 +168,54 @@ describe('MdTabHeader', () => {
         fixture.detectChanges();
         expect(appComponent.mdTabHeader.scrollDistance).toBe(0);
       });
+
+      it('should show ripples for pagination buttons', () => {
+        appComponent.addTabsForScrolling();
+        fixture.detectChanges();
+
+        expect(appComponent.mdTabHeader._showPaginationControls).toBe(true);
+
+        const buttonAfter = fixture.debugElement.query(By.css('.mat-tab-header-pagination-after'));
+
+        expect(fixture.nativeElement.querySelectorAll('.mat-ripple-element').length)
+          .toBe(0, 'Expected no ripple to show up initially.');
+
+        dispatchFakeEvent(buttonAfter.nativeElement, 'mousedown');
+        dispatchFakeEvent(buttonAfter.nativeElement, 'mouseup');
+
+        expect(fixture.nativeElement.querySelectorAll('.mat-ripple-element').length)
+          .toBe(1, 'Expected one ripple to show up after mousedown');
+      });
+
+      it('should allow disabling ripples for pagination buttons', () => {
+        appComponent.addTabsForScrolling();
+        appComponent.disableRipple = true;
+        fixture.detectChanges();
+
+        expect(appComponent.mdTabHeader._showPaginationControls).toBe(true);
+
+        const buttonAfter = fixture.debugElement.query(By.css('.mat-tab-header-pagination-after'));
+
+        expect(fixture.nativeElement.querySelectorAll('.mat-ripple-element').length)
+          .toBe(0, 'Expected no ripple to show up initially.');
+
+        dispatchFakeEvent(buttonAfter.nativeElement, 'mousedown');
+        dispatchFakeEvent(buttonAfter.nativeElement, 'mouseup');
+
+        expect(fixture.nativeElement.querySelectorAll('.mat-ripple-element').length)
+          .toBe(0, 'Expected no ripple to show up after mousedown');
+      });
+
     });
 
     describe('rtl', () => {
       beforeEach(() => {
         dir = 'rtl';
         fixture = TestBed.createComponent(SimpleTabHeaderApp);
-        fixture.detectChanges();
-
         appComponent = fixture.componentInstance;
         appComponent.dir = 'rtl';
+
+        fixture.detectChanges();
       });
 
       it('should scroll to show the focused tab label', () => {
@@ -192,8 +235,53 @@ describe('MdTabHeader', () => {
         expect(appComponent.mdTabHeader.scrollDistance).toBe(0);
       });
     });
-  });
 
+    it('should re-align the ink bar when the direction changes', () => {
+      fixture = TestBed.createComponent(SimpleTabHeaderApp);
+
+      const inkBar = fixture.componentInstance.mdTabHeader._inkBar;
+      spyOn(inkBar, 'alignToElement');
+
+      fixture.detectChanges();
+
+      change.next();
+      fixture.detectChanges();
+
+      expect(inkBar.alignToElement).toHaveBeenCalled();
+    });
+
+    it('should re-align the ink bar when the window is resized', fakeAsync(() => {
+      fixture = TestBed.createComponent(SimpleTabHeaderApp);
+      fixture.detectChanges();
+
+      const inkBar = fixture.componentInstance.mdTabHeader._inkBar;
+
+      spyOn(inkBar, 'alignToElement');
+
+      dispatchFakeEvent(window, 'resize');
+      tick(10);
+      fixture.detectChanges();
+
+      expect(inkBar.alignToElement).toHaveBeenCalled();
+      discardPeriodicTasks();
+    }));
+
+    it('should update arrows when the window is resized', fakeAsync(() => {
+      fixture = TestBed.createComponent(SimpleTabHeaderApp);
+
+      const header = fixture.componentInstance.mdTabHeader;
+
+      spyOn(header, '_checkPaginationEnabled');
+
+      dispatchFakeEvent(window, 'resize');
+      tick(10);
+      fixture.detectChanges();
+
+      expect(header._checkPaginationEnabled).toHaveBeenCalled();
+      discardPeriodicTasks();
+    }));
+
+  });
 });
 
 interface Tab {
@@ -204,14 +292,14 @@ interface Tab {
 @Component({
   template: `
   <div [dir]="dir">
-    <md-tab-header [selectedIndex]="selectedIndex"
+    <md-tab-header [selectedIndex]="selectedIndex" [disableRipple]="disableRipple"
                (indexFocused)="focusedIndex = $event"
                (selectFocusedIndex)="selectedIndex = $event">
-      <div md-tab-label-wrapper style="min-width: 30px; width: 30px"
+      <div mdTabLabelWrapper style="min-width: 30px; width: 30px"
            *ngFor="let tab of tabs; let i = index"
            [disabled]="!!tab.disabled"
            (click)="selectedIndex = i">
-         {{tab.label}}  
+         {{tab.label}}
       </div>
     </md-tab-header>
   </div>
@@ -223,11 +311,12 @@ interface Tab {
   `]
 })
 class SimpleTabHeaderApp {
+  disableRipple: boolean = false;
   selectedIndex: number = 0;
   focusedIndex: number;
   disabledTabIndex = 1;
   tabs: Tab[] = [{label: 'tab one'}, {label: 'tab one'}, {label: 'tab one'}, {label: 'tab one'}];
-  dir: LayoutDirection = 'ltr';
+  dir: Direction = 'ltr';
 
   @ViewChild(MdTabHeader) mdTabHeader: MdTabHeader;
 

@@ -1,11 +1,19 @@
-import {Injectable, ElementRef, Optional, SkipSelf} from '@angular/core';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
+import {ElementRef, Injectable, NgZone, Optional, SkipSelf} from '@angular/core';
+import {Platform} from '../../platform/index';
 import {Scrollable} from './scrollable';
 import {Subject} from 'rxjs/Subject';
-import {Observable} from 'rxjs/Observable';
 import {Subscription} from 'rxjs/Subscription';
-import 'rxjs/add/observable/fromEvent';
-import 'rxjs/add/observable/merge';
-import 'rxjs/add/operator/auditTime';
+import {fromEvent} from 'rxjs/observable/fromEvent';
+import {merge} from 'rxjs/observable/merge';
+import {auditTime} from '../../rxjs/index';
 
 
 /** Time in ms to throttle the scrolling events by default. */
@@ -17,11 +25,13 @@ export const DEFAULT_SCROLL_TIME = 20;
  */
 @Injectable()
 export class ScrollDispatcher {
+  constructor(private _ngZone: NgZone, private _platform: Platform) { }
+
   /** Subject for notifying that a registered scrollable reference element has been scrolled. */
   _scrolled: Subject<void> = new Subject<void>();
 
   /** Keeps track of the global `scroll` and `resize` subscriptions. */
-  _globalSubscription: Subscription = null;
+  _globalSubscription: Subscription | null = null;
 
   /** Keeps track of the amount of subscriptions to `scrolled`. Used for cleaning up afterwards. */
   private _scrolledCount = 0;
@@ -48,8 +58,10 @@ export class ScrollDispatcher {
    * @param scrollable Scrollable instance to be deregistered.
    */
   deregister(scrollable: Scrollable): void {
-    if (this.scrollableReferences.has(scrollable)) {
-      this.scrollableReferences.get(scrollable).unsubscribe();
+    const scrollableReference = this.scrollableReferences.get(scrollable);
+
+    if (scrollableReference) {
+      scrollableReference.unsubscribe();
       this.scrollableReferences.delete(scrollable);
     }
   }
@@ -60,24 +72,33 @@ export class ScrollDispatcher {
    * to override the default "throttle" time.
    */
   scrolled(auditTimeInMs: number = DEFAULT_SCROLL_TIME, callback: () => any): Subscription {
+    // Scroll events can only happen on the browser, so do nothing if we're not on the browser.
+    if (!this._platform.isBrowser) {
+      return Subscription.EMPTY;
+    }
+
     // In the case of a 0ms delay, use an observable without auditTime
     // since it does add a perceptible delay in processing overhead.
     let observable = auditTimeInMs > 0 ?
-      this._scrolled.asObservable().auditTime(auditTimeInMs) :
+      auditTime.call(this._scrolled.asObservable(), auditTimeInMs) :
       this._scrolled.asObservable();
 
     this._scrolledCount++;
 
     if (!this._globalSubscription) {
-      this._globalSubscription = Observable.merge(
-        Observable.fromEvent(window.document, 'scroll'),
-        Observable.fromEvent(window, 'resize')
-      ).subscribe(() => this._notify());
+      this._globalSubscription = this._ngZone.runOutsideAngular(() => {
+        return merge(
+          fromEvent(window.document, 'scroll'),
+          fromEvent(window, 'resize')
+        ).subscribe(() => this._notify());
+      });
     }
 
     // Note that we need to do the subscribing from here, in order to be able to remove
     // the global event listeners once there are no more subscriptions.
-    return observable.subscribe(callback).add(() => {
+    let subscription = observable.subscribe(callback);
+
+    subscription.add(() => {
       this._scrolledCount--;
 
       if (this._globalSubscription && !this.scrollableReferences.size && !this._scrolledCount) {
@@ -85,13 +106,15 @@ export class ScrollDispatcher {
         this._globalSubscription = null;
       }
     });
+
+    return subscription;
   }
 
   /** Returns all registered Scrollables that contain the provided element. */
   getScrollContainers(elementRef: ElementRef): Scrollable[] {
     const scrollingContainers: Scrollable[] = [];
 
-    this.scrollableReferences.forEach((subscription: Subscription, scrollable: Scrollable) => {
+    this.scrollableReferences.forEach((_subscription: Subscription, scrollable: Scrollable) => {
       if (this.scrollableContainsElement(scrollable, elementRef)) {
         scrollingContainers.push(scrollable);
       }
@@ -110,6 +133,8 @@ export class ScrollDispatcher {
     do {
       if (element == scrollableElement) { return true; }
     } while (element = element.parentElement);
+
+    return false;
   }
 
   /** Sends a notification that a scroll event has been fired. */
@@ -118,13 +143,16 @@ export class ScrollDispatcher {
   }
 }
 
-export function SCROLL_DISPATCHER_PROVIDER_FACTORY(parentDispatcher: ScrollDispatcher) {
-  return parentDispatcher || new ScrollDispatcher();
+/** @docs-private */
+export function SCROLL_DISPATCHER_PROVIDER_FACTORY(
+    parentDispatcher: ScrollDispatcher, ngZone: NgZone, platform: Platform) {
+  return parentDispatcher || new ScrollDispatcher(ngZone, platform);
 }
 
+/** @docs-private */
 export const SCROLL_DISPATCHER_PROVIDER = {
   // If there is already a ScrollDispatcher available, use that. Otherwise, provide a new one.
   provide: ScrollDispatcher,
-  deps: [[new Optional(), new SkipSelf(), ScrollDispatcher]],
+  deps: [[new Optional(), new SkipSelf(), ScrollDispatcher], NgZone, Platform],
   useFactory: SCROLL_DISPATCHER_PROVIDER_FACTORY
 };

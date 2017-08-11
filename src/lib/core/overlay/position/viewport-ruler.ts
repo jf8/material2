@@ -1,3 +1,11 @@
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
 import {Injectable, Optional, SkipSelf} from '@angular/core';
 import {ScrollDispatcher} from '../scroll/scroll-dispatcher';
 
@@ -13,15 +21,18 @@ export class ViewportRuler {
   private _documentRect?: ClientRect;
 
   constructor(scrollDispatcher: ScrollDispatcher) {
-    // Initially cache the document rectangle.
-    this._cacheViewportGeometry();
-
     // Subscribe to scroll and resize events and update the document rectangle on changes.
-    scrollDispatcher.scrolled(null, () => this._cacheViewportGeometry());
+    scrollDispatcher.scrolled(0, () => this._cacheViewportGeometry());
   }
 
   /** Gets a ClientRect for the viewport's bounds. */
   getViewportRect(documentRect = this._documentRect): ClientRect {
+    // Cache the document bounding rect so that we don't recompute it for multiple calls.
+    if (!documentRect) {
+      this._cacheViewportGeometry();
+      documentRect = this._documentRect;
+    }
+
     // Use the document element's bounding rect rather than the window scroll properties
     // (e.g. pageYOffset, scrollY) due to in issue in Chrome and IE where window scroll
     // properties and client coordinates (boundingClientRect, clientX/Y, etc.) are in different
@@ -51,30 +62,41 @@ export class ViewportRuler {
    * @param documentRect
    */
   getViewportScrollPosition(documentRect = this._documentRect) {
+    // Cache the document bounding rect so that we don't recompute it for multiple calls.
+    if (!documentRect) {
+      this._cacheViewportGeometry();
+      documentRect = this._documentRect;
+    }
+
     // The top-left-corner of the viewport is determined by the scroll position of the document
     // body, normally just (scrollLeft, scrollTop). However, Chrome and Firefox disagree about
     // whether `document.body` or `document.documentElement` is the scrolled element, so reading
     // `scrollTop` and `scrollLeft` is inconsistent. However, using the bounding rect of
     // `document.documentElement` works consistently, where the `top` and `left` values will
     // equal negative the scroll position.
-    const top = -documentRect.top || document.body.scrollTop || window.scrollY || 0;
-    const left = -documentRect.left || document.body.scrollLeft || window.scrollX || 0;
+    const top = -documentRect!.top || document.body.scrollTop || window.scrollY ||
+                  document.documentElement.scrollTop || 0;
+
+    const left = -documentRect!.left || document.body.scrollLeft || window.scrollX ||
+                  document.documentElement.scrollLeft || 0;
 
     return {top, left};
   }
 
   /** Caches the latest client rectangle of the document element. */
-  _cacheViewportGeometry?() {
+  _cacheViewportGeometry() {
     this._documentRect = document.documentElement.getBoundingClientRect();
   }
 
 }
 
+/** @docs-private */
 export function VIEWPORT_RULER_PROVIDER_FACTORY(parentRuler: ViewportRuler,
                                                 scrollDispatcher: ScrollDispatcher) {
   return parentRuler || new ViewportRuler(scrollDispatcher);
 }
 
+/** @docs-private */
 export const VIEWPORT_RULER_PROVIDER = {
   // If there is already a ViewportRuler available, use that. Otherwise, provide a new one.
   provide: ViewportRuler,

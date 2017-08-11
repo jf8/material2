@@ -1,5 +1,13 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
-import {CompatibilityModule} from '../core';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
+import {NgModule} from '@angular/core';
+import {MdCommonModule} from '../core';
 import {
   MdCard,
   MdCardHeader,
@@ -19,7 +27,7 @@ import {
 
 
 @NgModule({
-  imports: [CompatibilityModule],
+  imports: [MdCommonModule],
   exports: [
     MdCard,
     MdCardHeader,
@@ -35,7 +43,7 @@ import {
     MdCardImage,
     MdCardXlImage,
     MdCardAvatar,
-    CompatibilityModule,
+    MdCommonModule,
   ],
   declarations: [
     MdCard, MdCardHeader, MdCardTitleGroup, MdCardContent, MdCardTitle, MdCardSubtitle,
@@ -43,15 +51,7 @@ import {
     MdCardXlImage, MdCardAvatar,
   ],
 })
-export class MdCardModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdCardModule,
-      providers: []
-    };
-  }
-}
+export class MdCardModule {}
 
 
 export * from './card';

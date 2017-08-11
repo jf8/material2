@@ -16,50 +16,38 @@ module.exports = (config) => {
       require('karma-coverage')
     ],
     files: [
-      {pattern: 'dist/vendor/core-js/client/core.js', included: true, watched: false},
-      {pattern: 'dist/vendor/systemjs/dist/system-polyfills.js', included: true, watched: false},
-      {pattern: 'dist/vendor/systemjs/dist/system.src.js', included: true, watched: false},
-      {pattern: 'dist/vendor/zone.js/dist/zone.js', included: true, watched: false},
-      {pattern: 'dist/vendor/zone.js/dist/proxy.js', included: true, watched: false},
-      {pattern: 'dist/vendor/zone.js/dist/sync-test.js', included: true, watched: false},
-      {pattern: 'dist/vendor/zone.js/dist/jasmine-patch.js', included: true, watched: false},
-      {pattern: 'dist/vendor/zone.js/dist/async-test.js', included: true, watched: false},
-      {pattern: 'dist/vendor/zone.js/dist/fake-async-test.js', included: true, watched: false},
-      {pattern: 'dist/vendor/hammerjs/hammer.min.js', included: true, watched: false},
+      {pattern: 'node_modules/core-js/client/core.js', included: true, watched: false},
+      {pattern: 'node_modules/systemjs/dist/system.src.js', included: true, watched: false},
+      {pattern: 'node_modules/zone.js/dist/zone.js', included: true, watched: false},
+      {pattern: 'node_modules/zone.js/dist/proxy.js', included: true, watched: false},
+      {pattern: 'node_modules/zone.js/dist/sync-test.js', included: true, watched: false},
+      {pattern: 'node_modules/zone.js/dist/jasmine-patch.js', included: true, watched: false},
+      {pattern: 'node_modules/zone.js/dist/async-test.js', included: true, watched: false},
+      {pattern: 'node_modules/zone.js/dist/fake-async-test.js', included: true, watched: false},
+      {pattern: 'node_modules/hammerjs/hammer.min.js', included: true, watched: false},
+      {pattern: 'node_modules/hammerjs/hammer.min.js.map', included: false, watched: false},
+
+      // Include all Angular dependencies
+      {pattern: 'node_modules/@angular/**/*', included: false, watched: false},
+      {pattern: 'node_modules/rxjs/**/*', included: false, watched: false},
+
       {pattern: 'test/karma-test-shim.js', included: true, watched: false},
 
-      // paths loaded via module imports
-      {pattern: 'dist/**/*.js', included: false, watched: true},
+      // Include a Material theme in the test suite.
+      {pattern: 'dist/packages/**/core/theming/prebuilt/indigo-pink.css', included: true, watched: true},
 
-      // include one of the themes
-      {pattern: 'dist/**/prebuilt/indigo-pink.css', included: true, watched: true},
-
-      // paths loaded via Angular's component compiler
-      // (these paths need to be rewritten, see proxies section)
-      {pattern: 'dist/**/*.html', included: false, watched: true},
-      {pattern: 'dist/**/*.css', included: false, watched: true},
-
-      // paths to support debugging with source maps in dev tools
-      {pattern: 'dist/**/*.ts', included: false, watched: false},
-      {pattern: 'dist/**/*.js.map', included: false, watched: false}
+      // Includes all package tests and source files into karma. Those files will be watched.
+      // This pattern also matches all all sourcemap files and TypeScript files for debugging.
+      {pattern: 'dist/packages/**/*', included: false, watched: true},
     ],
-    proxies: {
-      // required for component assets fetched by Angular's compiler
-      '/components/': '/base/dist/components/',
-      '/core/': '/base/dist/core/',
-    },
 
     customLaunchers: customLaunchers,
 
     preprocessors: {
-      'dist/@angular/material/**/*.js': ['sourcemap']
+      'dist/packages/**/*.js': ['sourcemap']
     },
 
     reporters: ['dots'],
-
-    port: 9876,
-    colors: true,
-    logLevel: config.LOG_INFO,
     autoWatch: false,
 
     coverageReporter: {
@@ -99,25 +87,31 @@ module.exports = (config) => {
     browserConsoleLogOptions: {
       terminal: true,
       level: 'log'
-    }
+    },
 
+    client: {
+      jasmine: {
+        // TODO(jelbourn): re-enable random test order once we can de-flake existing issues.
+        random: false
+      }
+    }
   });
 
   if (process.env['TRAVIS']) {
-    let buildId = `TRAVIS #${process.env.TRAVIS_BUILD_NUMBER} (${process.env.TRAVIS_BUILD_ID})`;
+    const buildId = `TRAVIS #${process.env.TRAVIS_BUILD_NUMBER} (${process.env.TRAVIS_BUILD_ID})`;
 
     if (process.env['TRAVIS_PULL_REQUEST'] === 'false' &&
         process.env['MODE'] === "browserstack_required") {
 
-      config.preprocessors['dist/@angular/material/**/!(*+(.|-)spec).js'] = ['coverage'];
+      config.preprocessors['dist/packages/**/!(*+(.|-)spec).js'] = ['coverage'];
       config.reporters.push('coverage');
     }
 
     // The MODE variable is the indicator of what row in the test matrix we're running.
-    // It will look like <platform>_<alias>, where platform is one of 'saucelabs' or 'browserstack',
-    // and alias is one of the keys in the CI configuration variable declared in
-    // browser-providers.ts.
-    let [platform, alias] = process.env.MODE.split('_');
+    // It will look like <platform>_<target>, where platform is one of 'saucelabs', 'browserstack'
+    // or 'travis'. The target is a reference to different collections of browsers that can run
+    // in the previously specified platform.
+    const [platform, target] = process.env.MODE.split('_');
 
     if (platform === 'saucelabs') {
       config.sauceLabs.build = buildId;
@@ -125,10 +119,10 @@ module.exports = (config) => {
     } else if (platform === 'browserstack') {
       config.browserStack.build = buildId;
       config.browserStack.tunnelIdentifier = process.env.TRAVIS_JOB_ID;
-    } else {
+    } else if (platform !== 'travis') {
       throw new Error(`Platform "${platform}" unknown, but Travis specified. Exiting.`);
     }
 
-    config.browsers = platformMap[platform][alias.toLowerCase()];
+    config.browsers = platformMap[platform][target.toLowerCase()];
   }
 };

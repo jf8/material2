@@ -1,26 +1,32 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
-import {FormsModule} from '@angular/forms';
-import {HAMMER_GESTURE_CONFIG} from '@angular/platform-browser';
-import {GestureConfig, CompatibilityModule} from '../core';
-import {MdSlideToggle} from './slide-toggle';
-import {MdRippleModule} from '../core/ripple/index';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
 
+import {NgModule} from '@angular/core';
+import {HAMMER_GESTURE_CONFIG} from '@angular/platform-browser';
+import {MdSlideToggle} from './slide-toggle';
+import {
+  FOCUS_ORIGIN_MONITOR_PROVIDER,
+  GestureConfig,
+  MdCommonModule,
+  MdRippleModule,
+  PlatformModule,
+} from '../core';
 
 @NgModule({
-  imports: [FormsModule, MdRippleModule, CompatibilityModule],
-  exports: [MdSlideToggle, CompatibilityModule],
+  imports: [MdRippleModule, MdCommonModule, PlatformModule],
+  exports: [MdSlideToggle, MdCommonModule],
   declarations: [MdSlideToggle],
-  providers: [{provide: HAMMER_GESTURE_CONFIG, useClass: GestureConfig}],
+  providers: [
+    FOCUS_ORIGIN_MONITOR_PROVIDER,
+    {provide: HAMMER_GESTURE_CONFIG, useClass: GestureConfig}
+  ],
 })
-export class MdSlideToggleModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdSlideToggleModule,
-      providers: []
-    };
-  }
-}
+export class MdSlideToggleModule {}
 
 
 export * from './slide-toggle';

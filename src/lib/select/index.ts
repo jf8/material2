@@ -1,24 +1,29 @@
-import {NgModule, ModuleWithProviders} from '@angular/core';
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
+import {NgModule} from '@angular/core';
 import {CommonModule} from '@angular/common';
-import {MdSelect} from './select';
-import {MdOptionModule} from '../core/option/option';
-import {CompatibilityModule, OverlayModule} from '../core';
+import {MdSelect, MdSelectTrigger, MD_SELECT_SCROLL_STRATEGY_PROVIDER} from './select';
+import {MdCommonModule, OverlayModule, MdOptionModule} from '../core';
 
 
 @NgModule({
-  imports: [CommonModule, OverlayModule, MdOptionModule, CompatibilityModule],
-  exports: [MdSelect, MdOptionModule, CompatibilityModule],
-  declarations: [MdSelect],
+  imports: [
+    CommonModule,
+    OverlayModule,
+    MdOptionModule,
+    MdCommonModule,
+  ],
+  exports: [MdSelect, MdSelectTrigger, MdOptionModule, MdCommonModule],
+  declarations: [MdSelect, MdSelectTrigger],
+  providers: [MD_SELECT_SCROLL_STRATEGY_PROVIDER]
 })
-export class MdSelectModule {
-  /** @deprecated */
-  static forRoot(): ModuleWithProviders {
-    return {
-      ngModule: MdSelectModule,
-      providers: []
-    };
-  }
-}
+export class MdSelectModule {}
 
 
 export * from './select';

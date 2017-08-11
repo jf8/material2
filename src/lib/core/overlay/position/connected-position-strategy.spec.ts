@@ -1,13 +1,12 @@
 import {ElementRef} from '@angular/core';
+import {TestBed, inject} from '@angular/core/testing';
 import {ConnectedPositionStrategy} from './connected-position-strategy';
 import {ViewportRuler, VIEWPORT_RULER_PROVIDER} from './viewport-ruler';
 import {OverlayPositionBuilder} from './overlay-position-builder';
 import {ConnectedOverlayPositionChange} from './connected-position';
 import {Scrollable} from '../scroll/scrollable';
 import {Subscription} from 'rxjs/Subscription';
-import {TestBed, inject} from '@angular/core/testing';
-import Spy = jasmine.Spy;
-import {SCROLL_DISPATCHER_PROVIDER} from '../scroll/scroll-dispatcher';
+import {ScrollDispatchModule} from '../scroll/index';
 
 
 // Default width and height of the overlay and origin panels throughout these tests.
@@ -23,7 +22,8 @@ describe('ConnectedPositionStrategy', () => {
   let viewportRuler: ViewportRuler;
 
   beforeEach(() => TestBed.configureTestingModule({
-    providers: [VIEWPORT_RULER_PROVIDER, SCROLL_DISPATCHER_PROVIDER]
+    imports: [ScrollDispatchModule],
+    providers: [VIEWPORT_RULER_PROVIDER]
   }));
 
   beforeEach(inject([ViewportRuler], (_ruler: ViewportRuler) => {
@@ -41,19 +41,16 @@ describe('ConnectedPositionStrategy', () => {
     let overlayContainerElement: HTMLElement;
     let strategy: ConnectedPositionStrategy;
     let fakeElementRef: ElementRef;
-    let fakeViewportRuler: FakeViewportRuler;
     let positionBuilder: OverlayPositionBuilder;
 
-    let originRect: ClientRect;
-    let originCenterX: number;
-    let originCenterY: number;
+    let originRect: ClientRect | null;
+    let originCenterX: number | null;
+    let originCenterY: number | null;
 
     beforeEach(() => {
-      fakeViewportRuler = new FakeViewportRuler();
-
       // The origin and overlay elements need to be in the document body in order to have geometry.
       originElement = createPositionedBlockElement();
-      overlayContainerElement = createFixedElement();
+      overlayContainerElement = createOverlayContainer();
       overlayElement = createPositionedBlockElement();
       document.body.appendChild(originElement);
       document.body.appendChild(overlayContainerElement);
@@ -148,8 +145,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.bottom);
-        expect(overlayRect.left).toBe(originRect.left);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect.bottom));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect.left));
       });
 
       it('should reposition the overlay if it would go off the left of the screen', () => {
@@ -172,18 +169,14 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originCenterY - (OVERLAY_HEIGHT / 2));
-        expect(overlayRect.left).toBe(originRect.right);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originCenterY - (OVERLAY_HEIGHT / 2)));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect.right));
       });
 
       it('should reposition the overlay if it would go off the bottom of the screen', () => {
-        // Use the fake viewport ruler because we don't know *exactly* how big the viewport is.
-        fakeViewportRuler.fakeRect = {
-          top: 0, left: 0, width: 500, height: 500, right: 500, bottom: 500
-        };
-        positionBuilder = new OverlayPositionBuilder(fakeViewportRuler);
+        positionBuilder = new OverlayPositionBuilder(viewportRuler);
 
-        originElement.style.top = '475px';
+        originElement.style.bottom = '25px';
         originElement.style.left = '200px';
         originRect = originElement.getBoundingClientRect();
 
@@ -198,19 +191,15 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.bottom).toBe(originRect.top);
-        expect(overlayRect.right).toBe(originRect.right);
+        expect(Math.floor(overlayRect.bottom)).toBe(Math.floor(originRect.top));
+        expect(Math.floor(overlayRect.right)).toBe(Math.floor(originRect.right));
       });
 
       it('should reposition the overlay if it would go off the right of the screen', () => {
-        // Use the fake viewport ruler because we don't know *exactly* how big the viewport is.
-        fakeViewportRuler.fakeRect = {
-          top: 0, left: 0, width: 500, height: 500, right: 500, bottom: 500
-        };
-        positionBuilder = new OverlayPositionBuilder(fakeViewportRuler);
+        positionBuilder = new OverlayPositionBuilder(viewportRuler);
 
         originElement.style.top = '200px';
-        originElement.style.left = '475px';
+        originElement.style.right = '25px';
         originRect = originElement.getBoundingClientRect();
 
         strategy = positionBuilder.connectedTo(
@@ -224,19 +213,16 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.bottom);
-        expect(overlayRect.right).toBe(originRect.left);
+
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect.bottom));
+        expect(Math.floor(overlayRect.right)).toBe(Math.floor(originRect.left));
       });
 
       it('should recalculate and set the last position with recalculateLastPosition()', () => {
-        // Use the fake viewport ruler because we don't know *exactly* how big the viewport is.
-        fakeViewportRuler.fakeRect = {
-          top: 0, left: 0, width: 500, height: 500, right: 500, bottom: 500
-        };
-        positionBuilder = new OverlayPositionBuilder(fakeViewportRuler);
+        positionBuilder = new OverlayPositionBuilder(viewportRuler);
 
         // Push the trigger down so the overlay doesn't have room to open on the bottom.
-        originElement.style.top = '475px';
+        originElement.style.bottom = '25px';
         originRect = originElement.getBoundingClientRect();
 
         strategy = positionBuilder.connectedTo(
@@ -257,16 +243,12 @@ describe('ConnectedPositionStrategy', () => {
         strategy.recalculateLastPosition();
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.bottom).toBe(originRect.top,
+        expect(Math.floor(overlayRect.bottom)).toBe(Math.floor(originRect.top),
             'Expected overlay to be re-aligned to the trigger in the previous position.');
       });
 
       it('should default to the initial position, if no positions fit in the viewport', () => {
-        // Use the fake viewport ruler because we don't know *exactly* how big the viewport is.
-        fakeViewportRuler.fakeRect = {
-          top: 0, left: 0, width: 500, height: 500, right: 500, bottom: 500
-        };
-        positionBuilder = new OverlayPositionBuilder(fakeViewportRuler);
+        positionBuilder = new OverlayPositionBuilder(viewportRuler);
 
         // Make the origin element taller than the viewport.
         originElement.style.height = '1000px';
@@ -283,7 +265,7 @@ describe('ConnectedPositionStrategy', () => {
 
         let overlayRect = overlayElement.getBoundingClientRect();
 
-        expect(overlayRect.bottom).toBe(originRect.top,
+        expect(Math.floor(overlayRect.bottom)).toBe(Math.floor(originRect.top),
             'Expected overlay to be re-aligned to the trigger in the initial position.');
       });
 
@@ -300,8 +282,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.bottom);
-        expect(overlayRect.right).toBe(originRect.right);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect.bottom));
+        expect(Math.floor(overlayRect.right)).toBe(Math.floor(originRect.right));
       });
 
       it('should position a panel with the x offset provided', () => {
@@ -315,8 +297,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.top);
-        expect(overlayRect.left).toBe(originRect.left + 10);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect.top));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect.left + 10));
       });
 
       it('should position a panel with the y offset provided', () => {
@@ -330,20 +312,16 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.top + 50);
-        expect(overlayRect.left).toBe(originRect.left);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect.top + 50));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect.left));
       });
 
     });
 
     it('should emit onPositionChange event when position changes', () => {
-      // force the overlay to open in a fallback position
-      fakeViewportRuler.fakeRect = {
-        top: 0, left: 0, width: 500, height: 500, right: 500, bottom: 500
-      };
-      positionBuilder = new OverlayPositionBuilder(fakeViewportRuler);
+      positionBuilder = new OverlayPositionBuilder(viewportRuler);
       originElement.style.top = '200px';
-      originElement.style.left = '475px';
+      originElement.style.right = '25px';
 
       strategy = positionBuilder.connectedTo(
           fakeElementRef,
@@ -357,62 +335,72 @@ describe('ConnectedPositionStrategy', () => {
       const subscription = strategy.onPositionChange.subscribe(positionChangeHandler);
 
       strategy.apply(overlayElement);
+
+      const latestCall = positionChangeHandler.calls.mostRecent();
+
       expect(positionChangeHandler).toHaveBeenCalled();
-      expect(positionChangeHandler.calls.mostRecent().args[0])
-          .toEqual(jasmine.any(ConnectedOverlayPositionChange),
-              `Expected strategy to emit an instance of ConnectedOverlayPositionChange.`);
+      expect(latestCall.args[0] instanceof ConnectedOverlayPositionChange)
+          .toBe(true, `Expected strategy to emit an instance of ConnectedOverlayPositionChange.`);
 
-      it('should pick the fallback position that shows the largest area of the element', () => {
-        // Use the fake viewport ruler because we don't know *exactly* how big the viewport is.
-        fakeViewportRuler.fakeRect = {
-          top: 0, left: 0, width: 500, height: 500, right: 500, bottom: 500
-        };
-        positionBuilder = new OverlayPositionBuilder(fakeViewportRuler);
+      // If the strategy is re-applied and the initial position would now fit,
+      // the position change event should be emitted again.
+      originElement.style.top = '200px';
+      originElement.style.left = '200px';
+      strategy.apply(overlayElement);
 
-        originElement.style.top = '200px';
-        originElement.style.left = '475px';
-        originRect = originElement.getBoundingClientRect();
+      expect(positionChangeHandler).toHaveBeenCalledTimes(2);
 
-        strategy = positionBuilder.connectedTo(
-            fakeElementRef,
-            {originX: 'end', originY: 'center'},
-            {overlayX: 'start', overlayY: 'center'})
-            .withFallbackPosition(
-                {originX: 'end', originY: 'top'},
-                {overlayX: 'start', overlayY: 'bottom'})
-            .withFallbackPosition(
-                {originX: 'end', originY: 'top'},
-                {overlayX: 'end', overlayY: 'top'});
-
-        strategy.apply(overlayElement);
-
-        let overlayRect = overlayElement.getBoundingClientRect();
-
-        expect(overlayRect.top).toBe(originRect.top);
-        expect(overlayRect.left).toBe(originRect.left);
-      });
-
-      it('should position a panel properly when rtl', () => {
-        // must make the overlay longer than the origin to properly test attachment
-        overlayElement.style.width = `500px`;
-        originRect = originElement.getBoundingClientRect();
-        strategy = positionBuilder.connectedTo(
-            fakeElementRef,
-            {originX: 'start', originY: 'bottom'},
-            {overlayX: 'start', overlayY: 'top'})
-            .withDirection('rtl');
-        originElement.style.top = '0';
-        originElement.style.left = '0';
-
-        // If the strategy is re-applied and the initial position would now fit,
-        // the position change event should be emitted again.
-        strategy.apply(overlayElement);
-        expect(positionChangeHandler).toHaveBeenCalledTimes(2);
-
-        subscription.unsubscribe();
-      });
+      subscription.unsubscribe();
     });
 
+    it('should emit the onPositionChange event even if none of the positions fit', () => {
+      positionBuilder = new OverlayPositionBuilder(viewportRuler);
+      originElement.style.bottom = '25px';
+      originElement.style.right = '25px';
+
+      strategy = positionBuilder.connectedTo(
+          fakeElementRef,
+          {originX: 'end', originY: 'bottom'},
+          {overlayX: 'start', overlayY: 'top'})
+          .withFallbackPosition(
+              {originX: 'start', originY: 'bottom'},
+              {overlayX: 'end', overlayY: 'top'});
+
+      const positionChangeHandler = jasmine.createSpy('positionChangeHandler');
+      const subscription = strategy.onPositionChange.subscribe(positionChangeHandler);
+
+      strategy.apply(overlayElement);
+
+      expect(positionChangeHandler).toHaveBeenCalled();
+
+      subscription.unsubscribe();
+    });
+
+    it('should pick the fallback position that shows the largest area of the element', () => {
+      positionBuilder = new OverlayPositionBuilder(viewportRuler);
+
+      originElement.style.top = '200px';
+      originElement.style.right = '25px';
+      originRect = originElement.getBoundingClientRect();
+
+      strategy = positionBuilder.connectedTo(
+          fakeElementRef,
+          {originX: 'end', originY: 'center'},
+          {overlayX: 'start', overlayY: 'center'})
+          .withFallbackPosition(
+              {originX: 'end', originY: 'top'},
+              {overlayX: 'start', overlayY: 'bottom'})
+          .withFallbackPosition(
+              {originX: 'end', originY: 'top'},
+              {overlayX: 'end', overlayY: 'top'});
+
+      strategy.apply(overlayElement);
+
+      let overlayRect = overlayElement.getBoundingClientRect();
+
+      expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect.top));
+      expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect.left));
+    });
 
     /**
      * Run all tests for connecting the overlay to the origin such that first preferred
@@ -430,8 +418,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.bottom);
-        expect(overlayRect.left).toBe(originRect.left);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect!.bottom));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect!.left));
       });
 
       it('should position to the right, center aligned vertically', () => {
@@ -443,8 +431,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originCenterY - (OVERLAY_HEIGHT / 2));
-        expect(overlayRect.left).toBe(originRect.right);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originCenterY! - (OVERLAY_HEIGHT / 2)));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect!.right));
       });
 
       it('should position to the left, below', () => {
@@ -456,8 +444,9 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.bottom);
-        expect(overlayRect.right).toBe(originRect.left);
+
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect!.bottom));
+        expect(Math.round(overlayRect.right)).toBe(Math.round(originRect!.left));
       });
 
       it('should position above, right aligned', () => {
@@ -469,8 +458,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.bottom).toBe(originRect.top);
-        expect(overlayRect.right).toBe(originRect.right);
+        expect(Math.round(overlayRect.bottom)).toBe(Math.round(originRect!.top));
+        expect(Math.round(overlayRect.right)).toBe(Math.round(originRect!.right));
       });
 
       it('should position below, centered', () => {
@@ -482,8 +471,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.bottom);
-        expect(overlayRect.left).toBe(originCenterX - (OVERLAY_WIDTH / 2));
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect!.bottom));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originCenterX! - (OVERLAY_WIDTH / 2)));
       });
 
       it('should center the overlay on the origin', () => {
@@ -495,8 +484,8 @@ describe('ConnectedPositionStrategy', () => {
         strategy.apply(overlayElement);
 
         let overlayRect = overlayElement.getBoundingClientRect();
-        expect(overlayRect.top).toBe(originRect.top);
-        expect(overlayRect.left).toBe(originRect.left);
+        expect(Math.floor(overlayRect.top)).toBe(Math.floor(originRect!.top));
+        expect(Math.floor(overlayRect.left)).toBe(Math.floor(originRect!.left));
       });
     }
   });
@@ -507,13 +496,13 @@ describe('ConnectedPositionStrategy', () => {
     let strategy: ConnectedPositionStrategy;
 
     let scrollable: HTMLDivElement;
-    let positionChangeHandler: Spy;
+    let positionChangeHandler: jasmine.Spy;
     let onPositionChangeSubscription: Subscription;
     let positionChange: ConnectedOverlayPositionChange;
 
     beforeEach(() => {
       // Set up the overlay
-      overlayContainerElement = createFixedElement();
+      overlayContainerElement = createOverlayContainer();
       overlayElement = createPositionedBlockElement();
       document.body.appendChild(overlayContainerElement);
       overlayContainerElement.appendChild(overlayElement);
@@ -534,7 +523,9 @@ describe('ConnectedPositionStrategy', () => {
           fakeElementRef,
           {originX: 'start', originY: 'bottom'},
           {overlayX: 'start', overlayY: 'top'});
-      strategy.withScrollableContainers([new Scrollable(new FakeElementRef(scrollable), null)]);
+
+      strategy.withScrollableContainers([
+          new Scrollable(new FakeElementRef(scrollable), null!, null!, null!)]);
 
       positionChangeHandler = jasmine.createSpy('positionChangeHandler');
       onPositionChangeSubscription = strategy.onPositionChange.subscribe(positionChangeHandler);
@@ -601,14 +592,119 @@ describe('ConnectedPositionStrategy', () => {
       });
     });
   });
+
+  describe('positioning properties', () => {
+    let originElement: HTMLElement;
+    let overlayElement: HTMLElement;
+    let overlayContainerElement: HTMLElement;
+    let strategy: ConnectedPositionStrategy;
+    let fakeElementRef: ElementRef;
+    let positionBuilder: OverlayPositionBuilder;
+
+    beforeEach(() => {
+      // The origin and overlay elements need to be in the document body in order to have geometry.
+      originElement = createPositionedBlockElement();
+      overlayContainerElement = createOverlayContainer();
+      overlayElement = createPositionedBlockElement();
+      document.body.appendChild(originElement);
+      document.body.appendChild(overlayContainerElement);
+      overlayContainerElement.appendChild(overlayElement);
+
+      fakeElementRef = new FakeElementRef(originElement);
+      positionBuilder = new OverlayPositionBuilder(viewportRuler);
+    });
+
+    afterEach(() => {
+      document.body.removeChild(originElement);
+      document.body.removeChild(overlayContainerElement);
+    });
+
+    describe('in ltr', () => {
+      it('should use `left` when positioning an element at the start', () => {
+        strategy = positionBuilder.connectedTo(
+            fakeElementRef,
+            {originX: 'start', originY: 'top'},
+            {overlayX: 'start', overlayY: 'top'});
+
+        strategy.apply(overlayElement);
+        expect(overlayElement.style.left).toBeTruthy();
+        expect(overlayElement.style.right).toBeFalsy();
+      });
+
+      it('should use `right` when positioning an element at the end', () => {
+        strategy = positionBuilder.connectedTo(
+            fakeElementRef,
+            {originX: 'end', originY: 'top'},
+            {overlayX: 'end', overlayY: 'top'});
+
+        strategy.apply(overlayElement);
+        expect(overlayElement.style.right).toBeTruthy();
+        expect(overlayElement.style.left).toBeFalsy();
+      });
+
+    });
+
+    describe('in rtl', () => {
+      it('should use `right` when positioning an element at the start', () => {
+        strategy = positionBuilder.connectedTo(
+            fakeElementRef,
+            {originX: 'start', originY: 'top'},
+            {overlayX: 'start', overlayY: 'top'}
+        )
+        .withDirection('rtl');
+
+        strategy.apply(overlayElement);
+        expect(overlayElement.style.right).toBeTruthy();
+        expect(overlayElement.style.left).toBeFalsy();
+      });
+
+      it('should use `left` when positioning an element at the end', () => {
+        strategy = positionBuilder.connectedTo(
+            fakeElementRef,
+            {originX: 'end', originY: 'top'},
+            {overlayX: 'end', overlayY: 'top'}
+        ).withDirection('rtl');
+
+        strategy.apply(overlayElement);
+        expect(overlayElement.style.left).toBeTruthy();
+        expect(overlayElement.style.right).toBeFalsy();
+      });
+    });
+
+    describe('vertical', () => {
+      it('should use `top` when positioning at element along the top', () => {
+        strategy = positionBuilder.connectedTo(
+            fakeElementRef,
+            {originX: 'start', originY: 'top'},
+            {overlayX: 'start', overlayY: 'top'}
+        );
+
+        strategy.apply(overlayElement);
+        expect(overlayElement.style.top).toBeTruthy();
+        expect(overlayElement.style.bottom).toBeFalsy();
+      });
+
+      it('should use `bottom` when positioning at element along the bottom', () => {
+        strategy = positionBuilder.connectedTo(
+            fakeElementRef,
+            {originX: 'start', originY: 'bottom'},
+            {overlayX: 'start', overlayY: 'bottom'}
+        );
+
+        strategy.apply(overlayElement);
+        expect(overlayElement.style.bottom).toBeTruthy();
+        expect(overlayElement.style.top).toBeFalsy();
+      });
+    });
+
+  });
+
 });
 
 /** Creates an absolutely positioned, display: block element with a default size. */
 function createPositionedBlockElement() {
   let element = createBlockElement();
   element.style.position = 'absolute';
-  element.style.top = '0';
-  element.style.left = '0';
   return element;
 }
 
@@ -622,15 +718,10 @@ function createBlockElement() {
   return element;
 }
 
-/** Creates an position: fixed element that spans the screen size. */
-function createFixedElement() {
+/** Creates the wrapper for all of the overlays. */
+function createOverlayContainer() {
   let element = document.createElement('div');
-  element.style.position = 'fixed';
-  element.style.top = '0';
-  element.style.left = '0';
-  element.style.width = `100%`;
-  element.style.height = `100%`;
-  element.style.zIndex = '100';
+  element.classList.add('cdk-overlay-container');
   return element;
 }
 
@@ -646,23 +737,7 @@ function createOverflowContainerElement() {
 }
 
 
-/** Fake implementation of ViewportRuler that just returns the previously given ClientRect. */
-class FakeViewportRuler implements ViewportRuler {
-  fakeRect: ClientRect = {left: 0, top: 0, width: 1014, height: 686, bottom: 686, right: 1014};
-  fakeScrollPos: {top: number, left: number} = {top: 0, left: 0};
-
-  getViewportRect() {
-    return this.fakeRect;
-  }
-
-  getViewportScrollPosition(documentRect?: ClientRect): {top: number; left: number} {
-    return this.fakeScrollPos;
-  }
-}
-
-
 /** Fake implementation of ElementRef that is just a simple container for nativeElement. */
 class FakeElementRef implements ElementRef {
-  constructor(public nativeElement: HTMLElement) {
-  }
+  constructor(public nativeElement: HTMLElement) { }
 }

@@ -1,6 +1,16 @@
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
 import {ElementRef, NgZone} from '@angular/core';
+import {Platform} from '../platform/platform';
 import {ViewportRuler} from '../overlay/position/viewport-ruler';
 import {RippleRef, RippleState} from './ripple-ref';
+
 
 /** Fade-in duration for the ripples. Can be modified with the speedFactor option. */
 export const RIPPLE_FADE_IN_DURATION = 450;
@@ -29,7 +39,7 @@ export class RippleRenderer {
   private _containerElement: HTMLElement;
 
   /** Element which triggers the ripple elements on mouse events. */
-  private _triggerElement: HTMLElement;
+  private _triggerElement: HTMLElement | null;
 
   /** Whether the mouse is currently down or not. */
   private _isMousedown: boolean = false;
@@ -46,16 +56,23 @@ export class RippleRenderer {
   /** Whether mouse ripples should be created or not. */
   rippleDisabled: boolean = false;
 
-  constructor(_elementRef: ElementRef, private _ngZone: NgZone, private _ruler: ViewportRuler) {
-    this._containerElement = _elementRef.nativeElement;
+  constructor(
+      elementRef: ElementRef,
+      private _ngZone: NgZone,
+      private _ruler: ViewportRuler,
+      platform: Platform) {
+    // Only do anything if we're on the browser.
+    if (platform.isBrowser) {
+      this._containerElement = elementRef.nativeElement;
 
-    // Specify events which need to be registered on the trigger.
-    this._triggerEvents.set('mousedown', this.onMousedown.bind(this));
-    this._triggerEvents.set('mouseup', this.onMouseup.bind(this));
-    this._triggerEvents.set('mouseleave', this.onMouseLeave.bind(this));
+      // Specify events which need to be registered on the trigger.
+      this._triggerEvents.set('mousedown', this.onMousedown.bind(this));
+      this._triggerEvents.set('mouseup', this.onMouseup.bind(this));
+      this._triggerEvents.set('mouseleave', this.onMouseLeave.bind(this));
 
-    // By default use the host element as trigger element.
-    this.setTriggerElement(this._containerElement);
+      // By default use the host element as trigger element.
+      this.setTriggerElement(this._containerElement);
+    }
   }
 
   /** Fades in a ripple at the given coordinates. */
@@ -87,7 +104,7 @@ export class RippleRenderer {
     ripple.style.width = `${radius * 2}px`;
 
     // If the color is not set, the default CSS color will be used.
-    ripple.style.backgroundColor = config.color;
+    ripple.style.backgroundColor = config.color || null;
     ripple.style.transitionDuration = `${duration}ms`;
 
     this._containerElement.appendChild(ripple);
@@ -136,7 +153,7 @@ export class RippleRenderer {
     // Once the ripple faded out, the ripple can be safely removed from the DOM.
     this.runTimeoutOutsideZone(() => {
       rippleRef.state = RippleState.HIDDEN;
-      rippleEl.parentNode.removeChild(rippleEl);
+      rippleEl.parentNode!.removeChild(rippleEl);
     }, RIPPLE_FADE_OUT_DURATION);
   }
 
@@ -146,10 +163,12 @@ export class RippleRenderer {
   }
 
   /** Sets the trigger element and registers the mouse events. */
-  setTriggerElement(element: HTMLElement) {
+  setTriggerElement(element: HTMLElement | null) {
     // Remove all previously register event listeners from the trigger element.
     if (this._triggerElement) {
-      this._triggerEvents.forEach((fn, type) => this._triggerElement.removeEventListener(type, fn));
+      this._triggerEvents.forEach((fn, type) => {
+        this._triggerElement!.removeEventListener(type, fn);
+      });
     }
 
     if (element) {

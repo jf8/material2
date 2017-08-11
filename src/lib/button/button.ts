@@ -1,18 +1,34 @@
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
 import {
   ChangeDetectionStrategy,
   Component,
   Directive,
   ElementRef,
-  HostBinding,
-  Input,
+  forwardRef,
   OnDestroy,
-  Renderer,
-  ViewEncapsulation
+  Optional,
+  Renderer2,
+  Self,
+  ViewEncapsulation,
+  Inject,
 } from '@angular/core';
-import {coerceBooleanProperty, FocusOriginMonitor} from '../core';
+import {FocusOriginMonitor, Platform} from '../core';
+import {mixinDisabled, CanDisable} from '../core/common-behaviors/disabled';
+import {CanColor, mixinColor} from '../core/common-behaviors/color';
+import {CanDisableRipple, mixinDisableRipple} from '../core/common-behaviors/disable-ripple';
 
 
 // TODO(kara): Convert attribute selectors to classes when attr maps become available
+
+/** Default color palette for round buttons (md-fab and md-mini-fab) */
+const DEFAULT_ROUND_BUTTON_COLOR = 'accent';
 
 
 /**
@@ -21,9 +37,7 @@ import {coerceBooleanProperty, FocusOriginMonitor} from '../core';
  */
 @Directive({
   selector: 'button[md-button], button[mat-button], a[md-button], a[mat-button]',
-  host: {
-    '[class.mat-button]': 'true'
-  }
+  host: {'class': 'mat-button'}
 })
 export class MdButtonCssMatStyler {}
 
@@ -35,9 +49,7 @@ export class MdButtonCssMatStyler {}
   selector:
       'button[md-raised-button], button[mat-raised-button], ' +
       'a[md-raised-button], a[mat-raised-button]',
-  host: {
-    '[class.mat-raised-button]': 'true'
-  }
+  host: {'class': 'mat-raised-button'}
 })
 export class MdRaisedButtonCssMatStyler {}
 
@@ -48,9 +60,7 @@ export class MdRaisedButtonCssMatStyler {}
 @Directive({
   selector:
       'button[md-icon-button], button[mat-icon-button], a[md-icon-button], a[mat-icon-button]',
-  host: {
-    '[class.mat-icon-button]': 'true',
-  }
+  host: {'class': 'mat-icon-button'}
 })
 export class MdIconButtonCssMatStyler {}
 
@@ -60,23 +70,40 @@ export class MdIconButtonCssMatStyler {}
  */
 @Directive({
   selector: 'button[md-fab], button[mat-fab], a[md-fab], a[mat-fab]',
-  host: {
-    '[class.mat-fab]': 'true'
-  }
+  host: {'class': 'mat-fab'}
 })
-export class MdFabCssMatStyler {}
+export class MdFab {
+  constructor(@Self() @Optional() @Inject(forwardRef(() => MdButton)) button: MdButton,
+              @Self() @Optional() @Inject(forwardRef(() => MdAnchor)) anchor: MdAnchor) {
+    // Set the default color palette for the md-fab components.
+    (button || anchor).color = DEFAULT_ROUND_BUTTON_COLOR;
+  }
+}
 
 /**
- * Directive whose purpose is to add the mat- CSS styling to this selector.
+ * Directive that targets mini-fab buttons and anchors. It's used to apply the `mat-` class
+ * to all mini-fab buttons and also is responsible for setting the default color palette.
  * @docs-private
  */
 @Directive({
   selector: 'button[md-mini-fab], button[mat-mini-fab], a[md-mini-fab], a[mat-mini-fab]',
-  host: {
-    '[class.mat-mini-fab]': 'true'
-  }
+  host: {'class': 'mat-mini-fab'}
 })
-export class MdMiniFabCssMatStyler {}
+export class MdMiniFab {
+  constructor(@Self() @Optional() @Inject(forwardRef(() => MdButton)) button: MdButton,
+              @Self() @Optional() @Inject(forwardRef(() => MdAnchor)) anchor: MdAnchor) {
+    // Set the default color palette for the md-mini-fab components.
+    (button || anchor).color = DEFAULT_ROUND_BUTTON_COLOR;
+  }
+}
+
+
+// Boilerplate for applying mixins to MdButton.
+/** @docs-private */
+export class MdButtonBase {
+  constructor(public _renderer: Renderer2, public _elementRef: ElementRef) {}
+}
+export const _MdButtonMixinBase = mixinColor(mixinDisabled(mixinDisableRipple(MdButtonBase)));
 
 
 /**
@@ -89,65 +116,38 @@ export class MdMiniFabCssMatStyler {}
             'button[mat-button], button[mat-raised-button], button[mat-icon-button],' +
             'button[mat-fab], button[mat-mini-fab]',
   host: {
-    '[disabled]': 'disabled',
+    '[disabled]': 'disabled || null',
   },
   templateUrl: 'button.html',
   styleUrls: ['button.css'],
+  inputs: ['disabled', 'disableRipple', 'color'],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class MdButton implements OnDestroy {
-  private _color: string;
+export class MdButton extends _MdButtonMixinBase
+    implements OnDestroy, CanDisable, CanColor, CanDisableRipple {
 
   /** Whether the button is round. */
-  _isRoundButton: boolean = ['icon-button', 'fab', 'mini-fab'].some(suffix => {
-    let el = this._getHostElement();
-    return el.hasAttribute('md-' + suffix) || el.hasAttribute('mat-' + suffix);
-  });
+  _isRoundButton: boolean = this._hasAttributeWithPrefix('fab', 'mini-fab');
 
-  /** Whether the ripple effect on click should be disabled. */
-  private _disableRipple: boolean = false;
-  private _disabled: boolean = null;
+  /** Whether the button is icon button. */
+  _isIconButton: boolean = this._hasAttributeWithPrefix('icon-button');
 
-  /** Whether the ripple effect for this button is disabled. */
-  @Input()
-  get disableRipple() { return this._disableRipple; }
-  set disableRipple(v) { this._disableRipple = coerceBooleanProperty(v); }
-
-  /** Whether the button is disabled. */
-  @Input()
-  get disabled() { return this._disabled; }
-  set disabled(value: boolean) { this._disabled = coerceBooleanProperty(value) ? true : null; }
-
-  constructor(private _elementRef: ElementRef, private _renderer: Renderer,
+  constructor(renderer: Renderer2,
+              elementRef: ElementRef,
+              private _platform: Platform,
               private _focusOriginMonitor: FocusOriginMonitor) {
+    super(renderer, elementRef);
     this._focusOriginMonitor.monitor(this._elementRef.nativeElement, this._renderer, true);
   }
 
   ngOnDestroy() {
-    this._focusOriginMonitor.unmonitor(this._elementRef.nativeElement);
-  }
-
-  /** The color of the button. Can be `primary`, `accent`, or `warn`. */
-  @Input()
-  get color(): string { return this._color; }
-  set color(value: string) { this._updateColor(value); }
-
-  _updateColor(newColor: string) {
-    this._setElementColor(this._color, false);
-    this._setElementColor(newColor, true);
-    this._color = newColor;
-  }
-
-  _setElementColor(color: string, isAdd: boolean) {
-    if (color != null && color != '') {
-      this._renderer.setElementClass(this._getHostElement(), `mat-${color}`, isAdd);
-    }
+    this._focusOriginMonitor.stopMonitoring(this._elementRef.nativeElement);
   }
 
   /** Focuses the button. */
   focus(): void {
-    this._renderer.invokeElementMethod(this._getHostElement(), 'focus');
+    this._getHostElement().focus();
   }
 
   _getHostElement() {
@@ -156,6 +156,25 @@ export class MdButton implements OnDestroy {
 
   _isRippleDisabled() {
     return this.disableRipple || this.disabled;
+  }
+
+  /**
+   * Gets whether the button has one of the given attributes
+   * with either an 'md-' or 'mat-' prefix.
+   */
+  _hasAttributeWithPrefix(...unprefixedAttributeNames: string[]) {
+    // If not on the browser, say that there are none of the attributes present.
+    // Since these only affect how the ripple displays (and ripples only happen on the client),
+    // detecting these attributes isn't necessary when not on the browser.
+    if (!this._platform.isBrowser) {
+      return false;
+    }
+
+    return unprefixedAttributeNames.some(suffix => {
+      const el = this._getHostElement();
+
+      return el.hasAttribute('md-' + suffix) || el.hasAttribute('mat-' + suffix);
+    });
   }
 }
 
@@ -167,27 +186,24 @@ export class MdButton implements OnDestroy {
   selector: `a[md-button], a[md-raised-button], a[md-icon-button], a[md-fab], a[md-mini-fab],
              a[mat-button], a[mat-raised-button], a[mat-icon-button], a[mat-fab], a[mat-mini-fab]`,
   host: {
-    '[attr.disabled]': 'disabled',
-    '[attr.aria-disabled]': '_isAriaDisabled',
+    '[attr.tabindex]': 'disabled ? -1 : 0',
+    '[attr.disabled]': 'disabled || null',
+    '[attr.aria-disabled]': 'disabled.toString()',
     '(click)': '_haltDisabledEvents($event)',
   },
+  inputs: ['disabled', 'disableRipple', 'color'],
   templateUrl: 'button.html',
   styleUrls: ['button.css'],
-  encapsulation: ViewEncapsulation.None
+  encapsulation: ViewEncapsulation.None,
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MdAnchor extends MdButton {
-  constructor(elementRef: ElementRef, renderer: Renderer, focusOriginMonitor: FocusOriginMonitor) {
-    super(elementRef, renderer, focusOriginMonitor);
-  }
-
-  /** @docs-private */
-  @HostBinding('tabIndex')
-  get tabIndex(): number {
-    return this.disabled ? -1 : 0;
-  }
-
-  get _isAriaDisabled(): string {
-    return this.disabled ? 'true' : 'false';
+  constructor(
+      platform: Platform,
+      focusOriginMonitor: FocusOriginMonitor,
+      elementRef: ElementRef,
+      renderer: Renderer2) {
+    super(renderer, elementRef, platform, focusOriginMonitor);
   }
 
   _haltDisabledEvents(event: Event) {

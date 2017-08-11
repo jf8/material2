@@ -1,3 +1,11 @@
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+
 import {Injectable, Optional, SkipSelf} from '@angular/core';
 
 
@@ -17,7 +25,9 @@ export class OverlayContainer {
   get themeClass(): string { return this._themeClass; }
   set themeClass(value: string) {
     if (this._containerElement) {
-      this._containerElement.classList.remove(this._themeClass);
+      if (this._themeClass) {
+        this._containerElement.classList.remove(this._themeClass);
+      }
 
       if (value) {
         this._containerElement.classList.add(value);
@@ -55,10 +65,12 @@ export class OverlayContainer {
   }
 }
 
+/** @docs-private */
 export function OVERLAY_CONTAINER_PROVIDER_FACTORY(parentContainer: OverlayContainer) {
   return parentContainer || new OverlayContainer();
-};
+}
 
+/** @docs-private */
 export const OVERLAY_CONTAINER_PROVIDER = {
   // If there is already an OverlayContainer available, use that. Otherwise, provide a new one.
   provide: OverlayContainer,
